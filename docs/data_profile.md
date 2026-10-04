@@ -145,7 +145,7 @@ period.datetimeFrom.local = 2026-09-01T00:00:00+05:30
 - **Reference monitors** (CPCB / DPCC / HSPCB / IITM / IMD): government-grade, consistent 15-minute measurement.
 - **Low-cost sensors** (AirGradient, Clarity): less accurate, especially in high humidity; different reporting patterns; includes at least one calibration unit ("NASA GSFC Rutgers Calib. N8").
 
-**Rule:** **Reference monitors only**, selected with `location.isMonitor == true`. Low-cost sensors are excluded for accuracy and consistency.
+**Rule:** Exclude known low-cost providers (`AirGradient`, `Clarity`), set in the config. *(Originally `isMonitor == true`; replaced after F16.)*
 
 ### F12 — Metadata is incomplete
 Several DPCC stations report `"provider": "N/A"`.
@@ -177,6 +177,22 @@ The hourly limit (2,000) is not reported anywhere in the response.
 - On HTTP 429, wait `reset` seconds plus a buffer, then retry with exponential backoff.
 
 ---
+### F16 — `isMonitor` is unreliable; 25% of government stations are unflagged
+Checking what the `isMonitor` filter excluded revealed 7 government stations marked `isMonitor: false`:
+New Moti Bagh (MHUA), IIT Delhi (IITM), and five DPCC stations (Talkatora Garden, JNU, NSUT Jaffarpur, IGNOU Maidan Garhi, Cantonment Area).
+They share owner `OpenAQ admin`, instruments `N/A`, and (mostly) provider `N/A`, which suggests manually entered, incomplete metadata.
+
+| Field | Separates the 7 from low-cost devices? |
+|---|---|
+| `isMonitor` | No — both `false` |
+| `instruments` | No — the 7 show `N/A` |
+| `owner` | No — `OpenAQ admin` appears on both sides |
+| `provider` | **Yes** — low-cost devices are always `AirGradient` or `Clarity` |
+
+**Impact:** The original filter silently dropped 7 of 28 active government stations (25% of the network) with no error.
+**Rules:**
+- Classify by excluding known low-cost providers (a denylist), not by `isMonitor` (an allowlist). A denylist fails *visibly* (a new provider appears in the output); the allowlist failed *invisibly*.
+- Discovery reports every dropped station with a reason on every run.
 
 ## 5. Sample raw record (`/v3/sensors/12236259/hours`)
 

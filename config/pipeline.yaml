@@ -1,0 +1,48 @@
+api: 
+  base_url: https://api.openaq.org/v3 
+  page_limit: 1000 
+  rate_limit: 
+    seconds_between_requests: 2.0 
+    pause_when_remaining_below: 3 
+    max_retries: 5 
+    backoff_base_seconds: 2 
+
+scope: 
+  name: ncr 
+  latitude: 28.4595 
+  longitude: 77.0266 
+  radius_m: 25000 
+  exclude_providers: 
+    - AirGradient 
+    - Clarity
+  exclude_location_ids: []
+  
+parameters: 
+  - id: 1 
+    name: pm10 
+    units: ug/m3 #micrograms per cubic meter 
+  - id: 2
+    name: pm25 
+    units: ug/m3 
+  - id: 15 
+    name: no2 
+    units: ppb 
+
+history: 
+  start_date: 2026-04-01 
+
+incremental: 
+  lookback_days: 3 
+
+quality: 
+  min_percent_complete: 75 
+  reject_source_flagged: true 
+  value_ranges: 
+    pm25: [0, 1500] 
+    pm10: [0, 2000] 
+    no2: [0, 1000] 
+
+storage: 
+  raw_bucket: raw 
+  curated_bucket: curated 
+  rejected_bucket: rejected 
