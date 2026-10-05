@@ -194,6 +194,27 @@ They share owner `OpenAQ admin`, instruments `N/A`, and (mostly) provider `N/A`,
 - Classify by excluding known low-cost providers (a denylist), not by `isMonitor` (an allowlist). A denylist fails *visibly* (a new provider appears in the output); the allowlist failed *invisibly*.
 - Discovery reports every dropped station with a reason on every run.
 
+### F17 — Completeness must be measured within each sensor's active window
+Measured against full calendar months, the least complete sensor-month was New Moti Bagh in June (40.7%).
+But the station stopped on 13 June: it delivered 293 of ~297 possible hours, nearly complete for its lifetime.
+
+**Rule:** Expected hours = hours from max(month start, first reading) to min(month end, last reading),
+not the full month.
+
+### F18 — Gaps occur at instrument level and station level
+From the first full load (Apr–Sep 2026), the least complete active sensor-months:
+- **Cantonment Area (DPCC)** — PM10 only, June: 43%. Other sensors unaffected → instrument outage.
+- **Teri Gram (HSPCB)** — PM10, PM2.5 and NO2 all at 57–61% in May and June → station-wide outage.
+
+No completed month had zero readings for an active sensor.
+
+**Rules:**
+- dbt computes **data capture** (hours present / expected hours, F17) per sensor per day and month.
+- Averages with capture below **75%** are flagged *insufficient data* rather than shown as normal values
+  (a common air-quality convention, e.g. US EPA).
+- This complements F8: F8 checks completeness *within* an hour (Spark); F18 checks completeness *across*
+  hours (dbt).
+
 ## 5. Sample raw record (`/v3/sensors/12236259/hours`)
 
 ```json

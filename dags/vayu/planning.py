@@ -5,7 +5,7 @@ from datetime import datetime, date, time, timedelta, timezone
 log = logging.getLogger(__name__) 
 
 
-def _next_month(d) : 
+def next_month(d) : 
     return date(d.year + d.month//12, d.month%12 + 1, 1) 
 
 def month_starts(start, end) : 
@@ -14,11 +14,11 @@ def month_starts(start, end) :
     months = [] 
     while current <= last : 
         months.append(current) 
-        current = _next_month(current) 
+        current = next_month(current) 
     return months 
 
 def close_time(month, lookback_days): 
-    month_end = datetime.combine(_next_month(month), time.min, tzinfo=timezone.utc) 
+    month_end = datetime.combine(next_month(month), time.min, tzinfo=timezone.utc) 
     return month_end + timedelta(days=lookback_days) 
 
 def fetch_decision(row, closes_at) : 
