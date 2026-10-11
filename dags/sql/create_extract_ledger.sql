@@ -11,4 +11,3 @@ CREATE TABLE IF NOT EXISTS extract_ledger(
     fetched_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY(sensor_id, period_month)
 ); 
-

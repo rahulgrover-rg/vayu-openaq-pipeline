@@ -35,12 +35,23 @@ incremental:
   lookback_days: 3 
 
 quality: 
-  min_percent_complete: 75 
-  reject_source_flagged: true 
-  value_ranges: 
-    pm25: [0, 1500] 
-    pm10: [0, 2000] 
-    no2: [0, 1000] 
+  sentinel_values: [-10000]
+  sub_raeding_sentinel: 9999
+  hard_limits: 
+    pm10: 2000 
+    pm25: 1000
+    no2: 1000 
+  instrument_ceilings: 
+    pm25: 999.99
+  soft_flags: 
+    min_percent_complete: 75
+    flag_source_flagged: true
+  # min_percent_complete: 75 
+  # reject_source_flagged: true 
+  # value_ranges: 
+  #   pm25: [0, 1500] 
+  #   pm10: [0, 2000] 
+  #   no2: [0, 1000] 
 
 storage: 
   raw_bucket: raw 

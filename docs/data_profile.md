@@ -215,6 +215,50 @@ No completed month had zero readings for an active sensor.
 - This complements F8: F8 checks completeness *within* an hour (Spark); F18 checks completeness *across*
   hours (dbt).
 
+### F19 — Sentinels mark missing data, at two levels, and leak into hourly averages
+- **Hourly value = −10000** (19 readings): the whole hour is a placeholder.
+- **15-minute value = −9999 or +10000** inside an hour: averaged with real values, producing
+  impossible hourly results. Verified via `summary.min` / `summary.max`, e.g. NO2 at Pusa (5404):
+  minimum −9999, maximum 3.52, hourly value −7500 ≈ (−9999 × 3 + 3.52) ÷ 4.
+  The two "extreme" PM2.5 values (7430, 2720 at New Moti Bagh) had maximum = 10000: error codes, not pollution.
+
+**Rules:** reject `sentinel_value` (value = −10000) and `sentinel_in_average`
+(any 15-minute value at ±9999 or beyond).
+*Lesson:* the first hypothesis (hour minimum = −10000) would have caught none of these;
+checking `summary.min` before coding the rule revealed −9999.
+
+### F20 — Negative values cluster into station incidents
+Small negatives (−285 to −0.567) appear right around sentinel events at the same stations:
+IIT Delhi (18 May: sentinel at 14:30 UTC, then 3 hours of negative PM10), Pusa IMD (15–18 May, NO2).
+**Rule:** reject `negative_value`.
+**Future (dbt):** flag station-days containing hard rejects as possible instrument incidents.
+
+### F21 — PM2.5 instrument ceiling at 999.99 µg/m³
+Teri Gram, 4 April: three hours where every 15-minute value was exactly 999.99 (hourly value rounds to 1000).
+The analyzer was flatlined at its maximum; the true concentration was at least that.
+**Rule:** flag `at_range_ceiling` when any 15-minute value reached the ceiling (`max_in_hour >= 999.99`).
+
+### F22 — PM2.5 exceeds PM10 in 0.7% of station-hours
+736 of 106,560 matched station-hours. Physically impossible (PM2.5 is a subset of PM10).
+Concentrated at NSIT Dwarka (5622) in May–June: PM2.5 766–858 vs PM10 20–130.
+**Rule:** cannot be decided per reading (which instrument is wrong is unknown) → dbt cross-sensor
+flag `pm25_exceeds_pm10` and a dbt test reporting the rate (Weekend 3).
+
+### F23 — 11% of readings have under 75% hourly coverage
+~12,000 readings per pollutant.
+**Rule:** not rejected. Valid but less reliable → soft flag `low_coverage`; dbt decides per model
+whether to include them.
+
+### F24 — No duplicate sensor-hours across month files
+0 duplicates in 327,662 readings: OpenAQ's month windows do not overlap.
+**Rule:** deduplicate anyway on (sensor_id, period_start_utc), keeping the most recently fetched.
+Cheap protection against future overlaps.
+
+### F25 — Hourly values are rounded to 3 significant figures
+e.g. value 101.0 vs `summary.avg` 101.45; −7498.4 reported as −7500.
+**Impact:** small, but averages computed from `value` carry rounding error; `summary.avg` is more precise.
+Kept `value` as the canonical field (it's OpenAQ's published hourly figure).
+
 ## 5. Sample raw record (`/v3/sensors/12236259/hours`)
 
 ```json

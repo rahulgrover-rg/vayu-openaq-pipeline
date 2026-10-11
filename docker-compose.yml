@@ -1,7 +1,8 @@
 name: vayu
 
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.3.1-python3.12
+  build: .
+  image: vayu-airflow:3.3.1-spark4.1.2
   user: "${AIRFLOW_UID:-50000}:0"
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -20,6 +21,7 @@ x-airflow-common: &airflow-common
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./config:/opt/airflow/pipeline_config
+    - ./.cache/ivy:/home/airflow/.ivy2
   depends_on: &airflow-depends
     postgres:
       condition: service_healthy
@@ -83,6 +85,8 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    ports: 
+      - "127.0.0.1:4040:4040"
     depends_on:
       <<: *airflow-depends
       airflow-apiserver:
