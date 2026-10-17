@@ -1,4 +1,4 @@
-from pyspark.sql import functions as F 
+from pyspark.sql import Window, functions as F 
 from pyspark.sql.types import (
     ArrayType, BooleanType, DoubleType, LongType, StringType, StructField, StructType,
 )
@@ -79,3 +79,77 @@ def flatten_readings(raw) :
         F.try_to_timestamp(F.col("fetched_at")).alias("fetched_at"),
         "source_file",
     )
+
+def _per_parameter(values_by_name, cfg) : 
+    ids = {p["name"]: p["id"] for p in cfg["parameters"]}
+    expr = F.lit(None).cast("double") 
+    for name, value in (values_by_name or {}).items(): 
+        if name not in ids : 
+            raise ValueError(f"quality rule names unknown parameter '{name}'; known: {sorted(ids)}")
+        expr = F.when(F.col("parameter_id") == ids[name], F.lit(float(value))).otherwise(expr)
+
+    return expr 
+
+def deduplicate(readings) : 
+    keyed = readings.filter(F.col("period_start_utc").isNotNull())
+    unkeyed = readings.filter(F.col("period_start_utc").isNull()) 
+
+    newest_first = Window.partitionBy("sensor_id", "period_start_utc").orderBy(F.col("fetched_at").desc())
+    ranked = keyed.withColumn("_rank", F.row_number().over(newest_first))
+    unique = ranked.filter("_rank = 1").drop("_rank").unionByName(unkeyed)
+    duplicates = ranked.filter("_rank > 1").drop("_rank") 
+    return unique, duplicates 
+
+
+def validate(readings, cfg) : 
+    q = cfg["quality"]
+    soft = q["soft_flags"]
+    sentinels = [float(v) for v in q["sentinel_values"]] 
+    sub_sentinel = float(q["sub_reading_sentinel"])
+    min_pct = float(soft["min_percent_complete"])
+    flag_source = bool(soft["flag_source_flagged"])
+    limit = _per_parameter(q["hard_limits"], cfg)
+    ceiling = _per_parameter(q.get("instrument_ceilings"), cfg) 
+    value = F.col("value") 
+
+    reject_reason = (
+        F.when(value.isNull(), "null_value") 
+        .when(F.col("period_start_utc").isNull(), "invalid_time")
+        .when(F.col("reading_parameter_id") != F.col("parameter_id"), "parameter_mismatch")
+        .when(value.isin(sentinels), "sentinel_value")
+        .when((F.col("min_in_hour") <= -sub_sentinel) | (F.col("max_in_hour") >= sub_sentinel), "sentinel_in_average") 
+        .when(value < 0, "negative_value")
+        .when(limit.isNotNull() & (value>limit), "above_instrument_range")
+    )
+
+    quality_flags = F.array_compact(F.array(
+        F.when(F.col("pct_complete") < min_pct, F.lit("low_coverage")),
+        F.when(F.lit(flag_source) & F.col("has_flags"), F.lit("source_flagged")),
+        F.when(ceiling.isNotNull() & (F.col("max_in_hour") >= ceiling), F.lit("at_range_ceiling")),
+    ))
+
+    return (readings
+            .withColumn("reject_reason", reject_reason)
+            .withColumn("quality_flags", quality_flags)
+    )
+
+def add_local_time(df, timezone) : 
+    local = F.from_utc_timestamp(F.col("period_start_utc"), timezone) 
+    return (
+        df.withColumn("period_start_local", local)
+        .withColumn("date_local", F.to_date(local))
+        .withColumn("hour_local", F.hour(local)) 
+        .withColumn("year", F.year(local))
+        .withColumn("month", F.month(local))
+    )
+
+def clean(raw, cfg) : 
+    readings = flatten_readings(raw) 
+    unique,duplicates = deduplicate(readings) 
+    checked = add_local_time(validate(unique, cfg), cfg["scope"]["timezone"])
+    return {
+        "readings" : readings ,
+        "duplicates" : duplicates ,
+        "curated" : checked.filter(F.col("reject_reason").isNull()).drop("reject_reason"),
+        "rejected" : checked.filter(F.col("reject_reason").isNotNull()) 
+    }

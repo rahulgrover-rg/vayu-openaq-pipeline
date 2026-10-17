@@ -12,6 +12,7 @@ scope:
   latitude: 28.4595 
   longitude: 77.0266 
   radius_m: 25000 
+  timezone: Asia/Kolkata
   exclude_providers: 
     - AirGradient 
     - Clarity
@@ -36,7 +37,7 @@ incremental:
 
 quality: 
   sentinel_values: [-10000]
-  sub_raeding_sentinel: 9999
+  sub_reading_sentinel: 9999
   hard_limits: 
     pm10: 2000 
     pm25: 1000

@@ -288,6 +288,35 @@ Kept `value` as the canonical field (it's OpenAQ's published hourly figure).
 
 ---
 
+## Cleaning results (Spark, 11 Oct 2026)
+
+| | Readings |
+|---|---|
+| Flattened from raw | 331,321 |
+| **Curated** | **331,130** (99.94%) |
+| **Rejected** | **191** (0.06%) |
+| Duplicates removed | 0 |
+
+**Rejected by reason:** null_value 150 · sentinel_value 19 · sentinel_in_average 12 · negative_value 10
+
+**Curated flags:** low_coverage 35,752 · source_flagged 223 · at_range_ceiling 11
+(89.1% of curated readings unflagged)
+
+- `at_range_ceiling` caught 8 partially saturated hours that a check on the hourly value would miss.
+- Most `null_value` rejects were already flagged by OpenAQ: independent agreement between quality systems.
+**Our rules vs OpenAQ's own flags:**
+
+| Reason | Rejected | Flagged by OpenAQ | Missed by OpenAQ |
+|---|---|---|---|
+| null_value | 150 | 150 | 0 |
+| negative_value | 10 | 3 | 7 |
+| sentinel_value | 19 | 0 | 19 |
+| sentinel_in_average | 12 | 0 | 12 |
+| **Total** | **191** | **153** | **38** |
+
+OpenAQ's flags identify missing values but none of the sentinel problems (F19).
+Relying on source flags alone would have passed 38 invalid readings into curated data.
+
 ## 6. Request budget
 
 **API limits:** 60 requests/minute **and** 2,000 requests/hour, shared by everything using the API key.
