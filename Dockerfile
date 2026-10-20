@@ -11,3 +11,4 @@ ENV JAVA_HOME=/usr/lib/jvm/default-java
 USER airflow
 COPY requirements.txt /requirements.txt 
 RUN pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" -r /requirements.txt
+RUN python -c "import duckdb; duckdb.sql('INSTALL httpfs')"
