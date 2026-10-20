@@ -20,6 +20,8 @@ def build_spark(endpoint, access_key, secret_key, app_name="vayu", master="local
         .master(master) 
         .config("spark.driver.memory", driver_memory) 
         .config("spark.sql.session.timeZone", "UTC") 
+        .config("spark.sql.shuffle.partitions", "8")
+        .config("spark.ui.showConsoleProgress", "false")
         # s3a connector 
         .config("spark.jars.packages", f"org.apache.hadoop:hadoop-aws:{hadoop}") 
         .config("spark.jars.ivy", "/home/airflow/.ivy2") 

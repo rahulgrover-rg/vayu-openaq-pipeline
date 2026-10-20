@@ -153,3 +153,49 @@ def clean(raw, cfg) :
         "curated" : checked.filter(F.col("reject_reason").isNull()).drop("reject_reason"),
         "rejected" : checked.filter(F.col("reject_reason").isNotNull()) 
     }
+
+def write_outputs(out, cfg): 
+    st = cfg["storage"] 
+    curated_path = f"s3a://{st["curated_bucket"]}/openaq/hours"
+    rejected_path = f"s3a://{st["rejected_bucket"]}/openaq/hours" 
+
+    (out["curated"]
+     .repartition("year", "month")
+     .sortWithinPartitions("sensor_id", "period_start_utc")
+     .write.mode("overwrite")
+     .partitionBy("year", "month")
+     .parquet(curated_path))
+
+    (
+        out["rejected"]
+        .coalesce(1)
+        .write.mode("overwrite")
+        .parquet(rejected_path)
+    )
+
+    return {"curated_path": curated_path, "rejected_path": rejected_path}
+
+def run_transform(spark, cfg): 
+    out = clean(read_raw(spark, cfg["storage"]["raw_bucket"]), cfg) 
+    for name in out : 
+        out[name] = out[name].cache()
+
+    counts = {name: df.count() for name,df in out.items()} 
+    accounted = counts["curated"] + counts["rejected"] + counts["duplicates"] 
+    if counts["readings"] != accounted:
+        raise RuntimeError(f"Reconciliation failed; nothing written: {counts}") 
+
+    by_reason = {row["reject_reason"]: row["count"]
+                 for row in out["rejected"].groupBy("reject_reason").count().collect()}
+
+    paths = write_outputs(out, cfg) 
+
+    written = {"curated": spark.read.parquet(paths["curated_path"]).count(),
+               "rejected": spark.read.parquet(paths["rejected_path"]).count()} 
+
+    expected = {"curated": counts["curated"], "rejected": counts["rejected"]}
+
+    if written != expected : 
+        raise RuntimeError(f"Write check failed: expected : {expected}, found : {written}")
+
+    return {**counts, "rejected_by_reason": by_reason}

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path 
 import pendulum 
 from airflow.sdk import Variable, dag, task 
+from vayu.assets import RAW_OPENAQ_HOURS
 
 log = logging.getLogger(__name__) 
 POOL = "openaq_api" 
@@ -91,7 +92,7 @@ def vayu_extract():
 
         return summary 
 
-    @task(trigger_rule="all_done") 
+    @task(trigger_rule="all_done", outlets=[RAW_OPENAQ_HOURS]) 
     def summarize(work): 
 
         if work is None: 
