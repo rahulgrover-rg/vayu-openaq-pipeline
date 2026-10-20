@@ -1,0 +1,30 @@
+version: 2 
+
+models: 
+  - name: dim_parameter 
+    description: "One row per pollutant in scope, with Indian (NAAQS) and WHO 24-hour standards in ugm3 and in pollutant's own units."
+    columns: 
+      - name: parameter_id
+        description: "OpenAQ parameter ID (natural key)"
+        data_tests: [unique, not_null]
+      - name: parameter_code
+        data_tests: 
+          - not_null
+          - accepted_values: 
+              arguments: 
+                values: ['pm10', 'pm25', 'no2']
+
+
+  - name: dim_date
+    description: "Calendar days (local IST), gap-free, from the first reading to the end of next year."
+    columns: 
+      - name: date_day 
+        description: "Calendar date (natural key)."
+        data_tests: [unique, not_null]
+      - name: season 
+        description: "IMD season."
+        data_tests: 
+          - accepted_values: 
+              arguments: 
+                values: ['Winter', 'Pre-monsoon', 'Monsoon', 'Post-monsoon']
+
