@@ -1,0 +1,17 @@
+vayu: 
+  target: dev 
+  outputs: 
+    dev: 
+      type: duckdb
+      path: /opt/airflow/warehouse/vayu.duckdb 
+      threads: 2
+      extensions: 
+        - httpfs 
+      secrets: 
+        - type: s3 
+          key_id: "{{ env_var('VAYU_S3_KEY') }}"
+          secret: "{{ env_var('VAYU_S3_SECRET') }}"
+          endpoint: "{{ env_var('VAYU_S3_ENDPOINT') }}"
+          url_style: path 
+          use_ssl: false 
+          region: us-east-1

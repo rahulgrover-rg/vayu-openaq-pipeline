@@ -1,0 +1,12 @@
+version: 2 
+
+models: 
+  - name: stg_readings
+    description: "Hourly readings from curated layer, one row per session per hour."
+    columns: 
+      - name: sensor_id
+        data_tests: [not_null]
+      - name: period_start_utc
+        data_tests: [not_null]
+      - name: value
+        data_tests: [not_null]

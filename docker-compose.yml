@@ -16,12 +16,18 @@ x-airflow-common: &airflow-common
     AIRFLOW_CONN_PIPELINE_DB: '{"conn_type": "postgres", "host": "postgres", "port": 5432, "login": "admin", "password": "${POSTGRES_PASSWORD}", "schema": "pipeline"}'
     AIRFLOW_CONN_MINIO: '{"conn_type": "aws", "login": "${MINIO_ROOT_USER}", "password": "${MINIO_ROOT_PASSWORD}", "extra": {"endpoint_url": "http://minio:9000", "region_name": "us-east-1"}}'
     AIRFLOW_VAR_OPENAQ_API_KEY: ${OPENAQ_API_KEY}
+    DBT_PROFILES_DIR: /opt/airflow/dbt 
+    VAYU_S3_ENDPOINT: minio:9000 
+    VAYU_S3_KEY: ${MINIO_ROOT_USER}
+    VAYU_S3_SECRET: ${MINIO_ROOT_PASSWORD}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./config:/opt/airflow/pipeline_config
     - ./.cache/ivy:/home/airflow/.ivy2
+    - ./dbt:/opt/airflow/dbt 
+    - ./warehouse:/opt/airflow/warehouse
   depends_on: &airflow-depends
     postgres:
       condition: service_healthy

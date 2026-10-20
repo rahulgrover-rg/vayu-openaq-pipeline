@@ -1,0 +1,10 @@
+version: 2 
+
+sources: 
+  - name: curated 
+    description: "Clean hourly readings written by Spark transform (vayu_transform)."
+    meta: 
+      external_location: "read_parquet('s3://curated/openaq/hours/**/*.parquet', hive_partitioning=true)"
+    tables: 
+      - name: hours
+        description: "One row per session per hour. Hard rejects are excluded; soft flags in quality_flags."

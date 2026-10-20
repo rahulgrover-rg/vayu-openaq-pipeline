@@ -3,7 +3,7 @@ import duckdb
 def _sql_text(value): 
     return "'" + str(value).replace("'", "''") + "'"
 
-def connect(endpoint_url, access_key, secret_key, database=":memory"): 
+def connect(endpoint_url, access_key, secret_key, database=":memory:"): 
     host = endpoint_url.split("://", 1)[-1] 
     con = duckdb.connect(database)
     con.execute("LOAD httpfs")

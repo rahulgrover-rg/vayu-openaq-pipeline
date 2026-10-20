@@ -12,3 +12,7 @@ USER airflow
 COPY requirements.txt /requirements.txt 
 RUN pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" -r /requirements.txt
 RUN python -c "import duckdb; duckdb.sql('INSTALL httpfs')"
+RUN python -m venv /home/airflow/dbt-venv \ 
+    && /home/airflow/dbt-venv/bin/pip install --no-cache-dir \
+        dbt-core==1.11.11 dbt-duckdb==1.10.1 duckdb==1.5.5 
+ENV PATH="${PATH}:/home/airflow/dbt-venv/bin"

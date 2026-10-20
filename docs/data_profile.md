@@ -91,6 +91,8 @@ The old NO2 sensor reported µg/m³ (ID 5); its replacement reports ppb (ID 15).
 12 of 45 stations in the area have not reported since 1 April 2026, but their sensors are still listed by the API.
 
 **Rule:** Covered by F2's activity-overlap rule — dead sensors are skipped automatically.
+**Update (17 Oct 2026):** Lodhi Road (IITM), silent since 27 Dec 2025, sent 2 readings around 12 Oct 2026
+and re-entered scope automatically (F26). Silence is not permanent; scope is re-evaluated every run.
 
 ### F5 — Long historical gaps
 Sector-51 has no data from either feed between Oct 2022 and Feb 2025.
@@ -258,6 +260,26 @@ Cheap protection against future overlaps.
 e.g. value 101.0 vs `summary.avg` 101.45; −7498.4 reported as −7500.
 **Impact:** small, but averages computed from `value` carry rounding error; `summary.avg` is more precise.
 Kept `value` as the canonical field (it's OpenAQ's published hourly figure).
+
+### F26 — The set of in-scope sensors changes over time
+Daily metadata snapshots show 83 sensors / 28 stations from 5–12 Oct 2026, then 86 / 29 from 17 Oct.
+The 3 added sensors are **Lodhi Road, Delhi - IITM (11607)** (PM10, PM2.5, NO2). The station had been
+silent since Dec 2025 (F4) and sent **2 hourly readings around 12 Oct 2026**, then went quiet again.
+
+Its first/last readings (Feb 2025 → 12 Oct 2026) span the whole window, so all 7 months were planned:
+April–September returned **0 readings** each (18 requests, ~1% of an hour's API budget), and October 2.
+
+**Impact:**
+- Station and sensor metadata change over time; stations can disappear, briefly return, and vanish again.
+- Planning from first/last readings cannot see gaps in between: a small, one-time cost per returning station.
+- A station with a handful of readings must not appear as a normal monthly value.
+
+**Rules:**
+- Scope is discovered on every run (no fixed lists); daily snapshots preserve each day's view
+  (the basis for slowly changing dimensions in dbt).
+- Empty months are recorded as successful with row_count 0, so they are never re-requested once final.
+- dbt: data capture (F17/F18) flags months like this as insufficient data; `dim_location` gets a
+  days-since-last-reading attribute so stale stations are visible.
 
 ## 5. Sample raw record (`/v3/sensors/12236259/hours`)
 

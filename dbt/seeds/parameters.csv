@@ -1,0 +1,4 @@
+parameter_id,parameter_code,display_name,units,ugm3_per_unit,naaqs_24h_ugm3,who_24h_ugm3
+1,pm10,PM10,ug/m3,1,100,45
+2,pm25,PM2.5,ug/m3,1,60,15
+15,no2,NO2,ppb,1.88,80,25

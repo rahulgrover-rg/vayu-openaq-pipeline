@@ -220,3 +220,7 @@ __marimo__/
 
 # Cache (PySpark)
 .cache/
+warehouse/
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
