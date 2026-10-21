@@ -28,3 +28,42 @@ models:
               arguments: 
                 values: ['Winter', 'Pre-monsoon', 'Monsoon', 'Post-monsoon']
 
+  - name: dim_location 
+    description: "One row per station ever in scope, with its most reacently seen attributes (SCD Type 1). Stations that left scope are kept."
+    columns: 
+      - name: location_id
+        description: "OpenAQ location ID (natural key)."
+        data_tests: [unique, not_null]
+      - name: city 
+        description: "Parsed from the station name and mapped through the city map seed. Null means a new city: Add it to the seed."
+        data_tests: [not_null]
+      - name: agency 
+        data_tests: 
+          - accepted_values: 
+              arguments: 
+                values: ['CPCB', 'DPCC', 'HSPCB', 'IMD', 'IITM', 'MHUA']
+              config: 
+                severity: warn
+      - name: days_since_last_reading
+        description: "Days between the station's last reading and build date. Changes on every build."
+  - name: dim_sensor
+    description: "One row per sensor ever in scope (SCD Type 1)."
+    columns: 
+      - name: sensor_id
+        description: "OpenAQ sensor ID (natural key)."
+        data_tests: [unique, not_null]
+      - name: location_id 
+        data_tests: 
+          - not_null
+          - relationships: 
+              arguments: 
+                to: ref('dim_location')
+                field: location_id
+      - name: parameter_id 
+        data_tests: 
+          - not_null
+          - relationships: 
+              arguments: 
+                to: ref('dim_parameter')
+                field: parameter_id
+

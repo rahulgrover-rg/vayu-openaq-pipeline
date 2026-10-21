@@ -8,3 +8,11 @@ sources:
     tables: 
       - name: hours
         description: "One row per session per hour. Hard rejects are excluded; soft flags in quality_flags."
+
+  - name: raw_metadata 
+    description: "Daily station and sensor metadata snapshots written by discovery (vayu_extract)."
+    tables: 
+      - name: snapshots 
+        description: "One file per day: in-scope stations (raw API records) and selected sensors."
+        meta: 
+          external_location: "read_json('s3://raw/openaq/metadata/snapshot_date=*/stations.json', hive_partitioning=true, union_by_name=true)"
