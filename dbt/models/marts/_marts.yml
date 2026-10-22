@@ -95,3 +95,26 @@ models:
         data_tests: [not_null]
       - name: value
         data_tests: [not_null]
+  - name: fact_sensor_daily 
+    description: "One row per sensor per local day within its active window, including days without readings. Use daily_mean_valid in charts: null unless >= 18 of 24 hours are present."
+    columns: 
+      - name: sensor_id
+        data_tests: 
+          - not_null 
+          - relationships: 
+              arguments: 
+                to: ref('dim_sensor')
+                field: sensor_id
+      - name: date_day 
+        data_tests: 
+          - not_null 
+          - relationships: 
+              arguments: 
+                to: ref('dim_date')
+                field: date_day
+      - name: data_status 
+        data_tests: 
+          - not_null 
+          - accepted_values: 
+              arguments: 
+                values: ['sufficient', 'insufficient', 'no_data']

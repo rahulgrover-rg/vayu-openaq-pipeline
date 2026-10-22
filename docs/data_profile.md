@@ -292,6 +292,39 @@ April–September returned **0 readings** each (18 requests, ~1% of an hour's AP
 - dbt: data capture (F17/F18) flags months like this as insufficient data; `dim_location` gets a
   days-since-last-reading attribute so stale stations are visible.
 
+### F27 — Gurugram's PM2.5 is high relative to PM10, mainly in humid months
+July 2026 averages: five of six Gurugram-district stations (four HSPCB, one IITM) show PM2.5/PM10
+ratios of 0.58–0.72, against 0.17–0.42 at almost all Delhi stations. PM10 levels are similar in both
+cities; only PM2.5 differs. NISE Gwal Pahari (IMD, Gurugram district) behaves like Delhi (0.31).
+The gap is largest in the monsoon (July exceedance: Gurugram 52.6%, Delhi 7.4%) and nearly
+disappears in drier October (40.7% vs 42.1%).
+
+**Possible causes:** (a) a real source difference (combustion vs dust); (b) humidity-related
+overestimation by PM2.5 instruments. Not distinguishable with current data.
+**Rules:** compare stations, not city aggregates; show the PM2.5/PM10 ratio; flag Gurugram monsoon
+PM2.5 for caution.
+**Future work:** add relative-humidity sensors to scope to test (b).
+
+### F28 — Network-wide feed outages recur
+**27–29 Aug 2026:** all 27 active stations had insufficient data for three consecutive days:
+partial delivery (some hours each day), not a full stop. A smaller wave hit 10–11 stations on 6–7 Aug.
+Outside these, 1–5 stations per day had insufficient data: normal background loss.
+
+The 27–29 Aug outage accounts for ~10 of August's 18.8 percentage points of insufficient
+sensor-days; without it, August (~9%) is in line with other months.
+
+With the 18–21 Oct outage (F6), that is **two network-wide outages in about two months**:
+a recurring property of the source, not an anomaly.
+
+NSIT Dwarka separately had 21 no-data sensor-days in August (one sensor largely offline);
+with F22 and a July PM2.5/PM10 ratio of 0.74, it is the least reliable station in the network.
+
+**Rules:**
+- 7-day lookback (F6) covers outages of this length at month ends.
+- Freshness warning when the newest reading is older than 48 h (dbt test).
+- dbt model `qa_network_days`: days on which a large share of stations lack sufficient data,
+  so the dashboard can mark network outages instead of showing unexplained gaps.
+
 ## 5. Sample raw record (`/v3/sensors/12236259/hours`)
 
 ```json
