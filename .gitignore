@@ -224,3 +224,5 @@ warehouse/
 dbt/target/
 dbt/logs/
 dbt/dbt_packages/
+
+logs/
