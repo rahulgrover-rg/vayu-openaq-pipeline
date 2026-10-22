@@ -1,6 +1,19 @@
 with facts as (
     SELECT * FROM {{ ref('fact_measurement') }} 
 ),
+flatline_hours as (
+    select f.sensor_id, f.period_start_utc 
+    from facts as f
+    join {{ ref('qa_flatlines') }} r
+    on r.sensor_id = f.sensor_id 
+    and f.period_start_utc >= r.run_start_utc 
+    and f.period_start_utc < r.run_end_utc
+),
+facts_flagged as (
+    select f.*, (fh.sensor_id is not null) as is_flatline
+    from facts f
+    left join flatline_hours fh using (sensor_id, period_start_utc) 
+),
 active_window as (
     SELECT sensor_id, location_id, parameter_id
     ,min(date_day) as first_day,
@@ -20,11 +33,13 @@ daily as (
         sensor_id,
         date_day,
         count(*) as hours_present,
+        count(*) filter (where is_flatline) as hours_flatline,
+        count(*) filter (where not is_flatline) as hours_usable,
         count(*) filter (where not is_low_coverage) as hours_full_coverage,
         avg(value) as daily_mean,
         min(value) as min_hourly,
         max(value) as max_hourly
-    from facts 
+    from facts_flagged 
     group by sensor_id, date_day
 ),
 
@@ -35,6 +50,8 @@ joined as (
         sd.parameter_id,
         sd.date_day,
         COALESCE(d.hours_present, 0) as hours_present,
+        COALESCE(d.hours_flatline, 0) as hours_flatline,
+        COALESCE(d.hours_usable, 0) as hours_usable,
         COALESCE(d.hours_full_coverage, 0) as hours_full_coverage,
         d.daily_mean,
         d.min_hourly,
@@ -49,23 +66,25 @@ select
     j.parameter_id,
     j.date_day,
     j.hours_present,
+    j.hours_flatline,
+    j.hours_usable,
     j.hours_full_coverage,
-    round(100.0 * j.hours_present / 24 , 1) as capture_pct,
+    round(100.0 * j.hours_usable / 24 , 1) as capture_pct,
     CASE 
         WHEN j.hours_present = 0 then 'no_data'
-        when j.hours_present >= {{ var('min_daily_capture_hours') }} then 'sufficient'
+        when j.hours_usable >= {{ var('min_daily_capture_hours') }} then 'sufficient'
         else 'insufficient'
     end as data_status,
     round(j.daily_mean, 2) as daily_mean,
     CASE 
-        when j.hours_present >= {{ var('min_daily_capture_hours') }} then round(j.daily_mean,2)
+        when j.hours_usable >= {{ var('min_daily_capture_hours') }} then round(j.daily_mean,2)
     end as daily_mean_valid,
     j.min_hourly,
     j.max_hourly,
     CASE 
-        when j.hours_present >= {{ var('min_daily_capture_hours') }} then j.daily_mean > p.naaqs_24h_in_units end as exceeds_naaqs_24h,
+        when j.hours_usable >= {{ var('min_daily_capture_hours') }} then j.daily_mean > p.naaqs_24h_in_units end as exceeds_naaqs_24h,
     CASE 
-        when j.hours_present >= {{ var('min_daily_capture_hours') }} then j.daily_mean > p.who_24h_in_units end as exceeds_who_24h
+        when j.hours_usable >= {{ var('min_daily_capture_hours') }} then j.daily_mean > p.who_24h_in_units end as exceeds_who_24h
 from joined j 
 join {{ ref('dim_parameter') }} p  
 using (parameter_id)

@@ -1,0 +1,23 @@
+version: 2
+models: 
+  - name: qa_pm_consistency 
+    description: "Station-hours with both PM2.5 and PM10: ratio and pm25 > pm10 flag (F22, F27)."
+    columns: 
+      - name: location_id 
+        data_tests: 
+          - relationships: 
+              arguments: 
+                to: ref('dim_location')
+                field: location_id
+
+      - name: qa_flatlines
+        description: "Runs of identical values over >= flatline_min_hours consecutive hours (F21)."
+
+      - name: qa_network_days
+        description: "One row per day, classified as normal, network_outage or latest_incomplete (F28)."
+        columns: 
+          - name: date_day 
+            data_tests: 
+              - accepted_values: 
+                  arguments: 
+                    values: ['normal', 'network_outage', 'latest_incomplete']

@@ -190,6 +190,24 @@ The hourly limit (2,000) is not reported anywhere in the response.
 - On HTTP 429, wait `reset` seconds plus a buffer, then retry with exponential backoff.
 
 ---
+
+### F15 — OpenAQ can return HTTP 500 for invalid input
+Requesting an oversized sensor ID (`999999999999`) returned **500 Internal Server Error**, not 404,
+even after 5 retries. A realistic but non-existent ID (`2000000000`) returned **404** as expected.
+The oversized ID is larger than a standard database integer can hold, so the server most likely
+failed while handling it (an integer overflow) rather than answering "not found". OpenAQ is also
+reported to return 500 for invalid coordinates.
+
+**Impact:** a 500 does not always mean a temporary server problem, so the client can retry
+requests that will never succeed (about a minute of backoff per request).
+**Rules:**
+- Only request IDs discovered from the API itself (discovery), never constructed IDs.
+- Transient failures are bounded: 5 retries, then `failed_transient` in the ledger; other sensors
+  continue.
+- Planned: escalate to `failed_permanent` after repeated transient failures across runs (the
+  ledger's `attempts` column already counts them).
+
+
 ### F16 — `isMonitor` is unreliable; 25% of government stations are unflagged
 Checking what the `isMonitor` filter excluded revealed 7 government stations marked `isMonitor: false`:
 New Moti Bagh (MHUA), IIT Delhi (IITM), and five DPCC stations (Talkatora Garden, JNU, NSUT Jaffarpur, IGNOU Maidan Garhi, Cantonment Area).
@@ -267,63 +285,202 @@ whether to include them.
 **Rule:** deduplicate anyway on (sensor_id, period_start_utc), keeping the most recently fetched.
 Cheap protection against future overlaps.
 
+
 ### F25 — Hourly values are rounded to 3 significant figures
-e.g. value 101.0 vs `summary.avg` 101.45; −7498.4 reported as −7500.
-**Impact:** small, but averages computed from `value` carry rounding error; `summary.avg` is more precise.
-Kept `value` as the canonical field (it's OpenAQ's published hourly figure).
+OpenAQ's hourly `value` is a rounded version of the hour's average, e.g. `value` 101.0 vs
+`summary.avg` 101.45; an average of −7498.4 is reported as −7500.
+
+**Impact:**
+- Averages computed from `value` carry a small rounding error; `summary.avg` is more precise.
+- Rounding makes identical consecutive values more likely at low concentrations, which matters for
+  flatline detection (F29): short runs of the same low value can be natural.
+
+**Rules:** `value` is kept as the canonical field (it is OpenAQ's published hourly figure).
+Flatline detection requires ≥ 6 consecutive identical hours; every run found in practice was ≥ 21 h,
+well beyond what rounding produces.
 
 ### F26 — The set of in-scope sensors changes over time
 Daily metadata snapshots show 83 sensors / 28 stations from 5–12 Oct 2026, then 86 / 29 from 17 Oct.
 The 3 added sensors are **Lodhi Road, Delhi - IITM (11607)** (PM10, PM2.5, NO2). The station had been
-silent since Dec 2025 (F4) and sent **2 hourly readings around 12 Oct 2026**, then went quiet again.
+silent since 27 Dec 2025 (F4) and sent **2 hourly readings around 12 Oct 2026**, then went quiet
+again (last reading 12 Oct 09:00 UTC, 8+ days before the 20 Oct snapshot).
 
 Its first/last readings (Feb 2025 → 12 Oct 2026) span the whole window, so all 7 months were planned:
-April–September returned **0 readings** each (18 requests, ~1% of an hour's API budget), and October 2.
+April–September returned **0 readings** each (18 requests, ~1% of an hour's API budget) and
+October 2. In the warehouse, its 18 empty files explain why fact_measurement has 576 source files
+against 594 raw files.
 
 **Impact:**
-- Station and sensor metadata change over time; stations can disappear, briefly return, and vanish again.
-- Planning from first/last readings cannot see gaps in between: a small, one-time cost per returning station.
+- Station and sensor metadata change over time; stations can disappear, briefly return, and
+  vanish again.
+- Planning from first/last readings cannot see gaps in between: a small, one-time cost per
+  returning station.
 - A station with a handful of readings must not appear as a normal monthly value.
 
 **Rules:**
-- Scope is discovered on every run (no fixed lists); daily snapshots preserve each day's view
-  (the basis for slowly changing dimensions in dbt).
-- Empty months are recorded as successful with row_count 0, so they are never re-requested once final.
-- dbt: data capture (F17/F18) flags months like this as insufficient data; `dim_location` gets a
-  days-since-last-reading attribute so stale stations are visible.
+- Scope is discovered on every run (no fixed lists); daily snapshots in the raw zone preserve each
+  day's view.
+- Empty months are recorded as successful with `row_count = 0`, so they are never re-requested
+  once final.
+- `dim_location` keeps every station ever seen (Type 1, all-time scope), with `first_seen_on`,
+  `last_seen_on`, `is_in_current_scope`, and `days_quiet_at_last_check`, so stale stations are
+  visible and historical facts never become orphans.
+- `fact_sensor_daily` derives each sensor's active window from its readings, so Lodhi Road's empty
+  months are not counted as missing data.
 
 ### F27 — Gurugram's PM2.5 is high relative to PM10, mainly in humid months
-July 2026 averages: five of six Gurugram-district stations (four HSPCB, one IITM) show PM2.5/PM10
-ratios of 0.58–0.72, against 0.17–0.42 at almost all Delhi stations. PM10 levels are similar in both
-cities; only PM2.5 differs. NISE Gwal Pahari (IMD, Gurugram district) behaves like Delhi (0.31).
-The gap is largest in the monsoon (July exceedance: Gurugram 52.6%, Delhi 7.4%) and nearly
-disappears in drier October (40.7% vs 42.1%).
+July 2026 station averages (valid days only):
 
-**Possible causes:** (a) a real source difference (combustion vs dust); (b) humidity-related
-overestimation by PM2.5 instruments. Not distinguishable with current data.
-**Rules:** compare stations, not city aggregates; show the PM2.5/PM10 ratio; flag Gurugram monsoon
-PM2.5 for caution.
-**Future work:** add relative-humidity sensors to scope to test (b).
+| Group | PM2.5 | PM10 | PM2.5 / PM10 |
+|---|---|---|---|
+| Most Delhi stations | 30–40 | 95–135 | 0.17–0.42 |
+| Gurugram: Vikas Sadan, Sector-51, Teri Gram, Manesar (HSPCB), Amity (IITM) | 61–101 | 88–140 | **0.58–0.72** |
+| Gurugram: NISE Gwal Pahari (IMD) | 33.1 | 107.4 | 0.31 |
+| Delhi: NSIT Dwarka (CPCB) | 59.2 | 79.8 | 0.74 |
 
-### F28 — Network-wide feed outages recur
-**27–29 Aug 2026:** all 27 active stations had insufficient data for three consecutive days:
-partial delivery (some hours each day), not a full stop. A smaller wave hit 10–11 stations on 6–7 Aug.
-Outside these, 1–5 stations per day had insufficient data: normal background loss.
+PM10 is similar in both cities; only PM2.5 differs. NISE Gwal Pahari, inside Gurugram district but
+on the greener Aravalli ridge, behaves like Delhi.
 
-The 27–29 Aug outage accounts for ~10 of August's 18.8 percentage points of insufficient
-sensor-days; without it, August (~9%) is in line with other months.
+The gap is largest in the monsoon and nearly disappears in drier months. Share of station-days
+above India's 24-hour PM2.5 standard:
 
-With the 18–21 Oct outage (F6), that is **two network-wide outages in about two months**:
-a recurring property of the source, not an anomaly.
+| | Apr | May | Jun | Jul | Aug | Sep | Oct |
+|---|---|---|---|---|---|---|---|
+| Delhi | 45.0% | 28.8% | 9.7% | 7.4% | 0.8% | 11.7% | 42.1% |
+| Gurugram | 64.9% | 62.0% | 51.2% | 52.6% | 26.6% | 30.2% | 40.7% |
 
-NSIT Dwarka separately had 21 no-data sensor-days in August (one sensor largely offline);
-with F22 and a July PM2.5/PM10 ratio of 0.74, it is the least reliable station in the network.
+Delhi follows the expected annual cycle: high pre-monsoon, near-clean air at the height of the
+monsoon, sharp rise in October as the monsoon ends and crop burning begins.
+
+**Possible causes:** (a) a real source difference in Gurugram (combustion from traffic, generators,
+industry, producing fine rather than coarse particles); (b) humidity-related overestimation by PM2.5
+instruments (particles absorb water in humid air and are counted as mass). Not distinguishable with
+current data; possibly both.
 
 **Rules:**
-- 7-day lookback (F6) covers outages of this length at month ends.
-- Freshness warning when the newest reading is older than 48 h (dbt test).
-- dbt model `qa_network_days`: days on which a large share of stations lack sufficient data,
-  so the dashboard can mark network outages instead of showing unexplained gaps.
+- Compare stations, not city aggregates; Gurugram has only 6 stations, 5 showing this pattern.
+- Show the PM2.5/PM10 ratio alongside PM2.5.
+- Flag Gurugram monsoon PM2.5 for caution in the dashboard.
+
+**Future work:** add relative-humidity sensors to scope and test whether the ratio rises with
+humidity at the affected stations.
+
+### F28 — Network-wide feed outages recur roughly monthly
+`qa_network_days` (days on which ≥ 80% of active stations lack sufficient data) found five
+network-wide outages in 6.5 months, **every one affecting 100% of active stations**:
+
+| Dates | Length |
+|---|---|
+| 16 Apr 2026 | 1 day |
+| 6 May 2026 | 1 day |
+| 23–25 Jun 2026 | 3 days |
+| 27–29 Aug 2026 | 3 days |
+| 2 Oct 2026 | 1 day |
+
+Plus the feed stall from 18 Oct 2026 08:30 UTC (F6), which appears as `latest_incomplete` rather
+than as an outage. Identical impact across six independent agencies points to the upstream feed,
+not instruments.
+
+The 27–29 Aug outage was partial delivery (some hours each day, mostly `insufficient` rather than
+`no_data`) and accounts for ~10 of August's 18.8 percentage points of insufficient sensor-days;
+without it, August (~9%) is in line with other months. A smaller wave hit 10–11 stations on
+6–7 Aug; on other days 1–5 stations had insufficient data (normal background loss).
+
+NSIT Dwarka separately had 21 no-data sensor-days in August (one sensor largely offline). With F22
+and a July PM2.5/PM10 ratio of 0.74, it is the least reliable station in the network.
+
+**Impact:** an outage longer than the lookback window around a month end would lose that month's
+final days permanently.
+**Rules:**
+- Lookback window 7 days (widened from 3; F6).
+- dbt freshness warning when the newest reading is older than 48 h (warns rather than fails: an
+  upstream outage cannot be fixed by stopping the pipeline).
+- `qa_network_days` classifies every day as `normal`, `network_outage` or `latest_incomplete`,
+  so the dashboard can mark outages instead of showing unexplained gaps.
+- The newest day is always `latest_incomplete`: the daily batch cutoff (~08:30 UTC, 14:00 IST)
+  leaves every station partial, which would otherwise be misread as an outage every day.
+
+### F29 — Flatlines: instruments reporting zeros or frozen values for hours
+`qa_flatlines` (runs of identical values over ≥ 6 consecutive hours, found with a gaps-and-islands
+query) found two kinds:
+
+**Zero outputs:**
+| Station | Pollutant | Runs of exactly 0.0 |
+|---|---|---|
+| Vikas Sadan, Gurugram | NO2 | 62, 53, 47, 33, 23 h (June) |
+| Amity University | NO2 | 28 h (27 May), 23 h (14 May) |
+| Cantonment Area | PM10 | 25 h, 23 h (2–3 June) |
+| IIT Delhi | PM2.5 | 28 h (18 April) |
+| JNU | PM2.5 | 26 h (27 April) |
+| NSIT Dwarka | PM2.5 | 21 h (3 May) |
+
+Urban NO2 does not fall to zero for days: these are instruments reporting 0 instead of a value.
+
+**Frozen values:**
+- Vikas Sadan PM2.5 (55.8) and PM10 (81.9) froze at the same minute on 9 Oct (38 h and 25 h), and
+  again together on 19 Jul (9.1 and 13.1, 24 h each): two instruments failing simultaneously is
+  unlikely, pointing to the station's data logger repeating its last values.
+- Sri Aurobindo Marg PM2.5 at exactly 72.0 for 34 h and 24 h in April; JNU PM2.5 at 27.9 for 36 h.
+
+**All of these passed Spark validation:** each reading is plausible on its own; the problem is only
+visible across time.
+
+**Cross-check (Cantonment Area, June):** PM2.5 > PM10 in 18.9% of paired hours, yet the median
+ratio is only 0.17. The PM10 zero runs explain it: when PM10 reads 0, any PM2.5 value exceeds it.
+The fault is PM10, not PM2.5. Three models (F18 capture, F22 consistency, F29 flatlines) identify
+the same instrument and month.
+
+**Effect of excluding flatline hours (Vikas Sadan NO2):**
+| Month | Hours present | Flatline hours | Sufficient days | Avg NO2 (ppb) |
+|---|---|---|---|---|
+| April | 612 | 0 | 24 | 21.1 |
+| May | 600 | 0 | 23 | 21.2 |
+| June | 489 | **317** | **6** | **20.9** |
+| July | 599 | 69 | 16 | 6.1 |
+| August | 626 | 0 | 25 | 6.6 |
+
+Including the zeros, June's average would have been ~7 ppb, a third of the true level. Excluded,
+June (20.9) matches April–May. July–August fall to ~6.4 ppb: a monsoon-to-spring ratio of 0.30,
+the lowest in the network but within a continuous spread across stations (next: 0.42, 0.46; most
+0.45–0.85). No evidence of an instrument step change: a normal monsoon drop at the strong end of
+the range.
+
+**Rules:** flatline hours stay in `fact_measurement` (the source's raw record) but are treated as
+missing in `fact_sensor_daily`: excluded from daily means and from sufficiency, counted separately
+as `hours_flatline`. Threshold 6 h (see F25).
+
+### F30 — Sector-51 Gurugram NO2: a "soft flatline" until 19 June 2026
+Found by **peer comparison**: comparing each station's July–August NO2 with its April–May NO2, the
+network ranged 0.30–1.29, except **Sector-51 Gurugram at 6.24** (4.9 ppb → 30.8 ppb). Spring
+4.9 ppb was implausibly low for an urban station (all others ≥ 13.8 ppb).
+
+Monthly view:
+| Month | Avg NO2 (ppb) | Daily range |
+|---|---|---|
+| April | 5.0 | 4.8–5.2 |
+| May | 4.9 | 4.0–5.1 |
+| June | 16.2 | 4.4–32.4 (transition) |
+| July | 30.8 | 24.4–36.8 |
+| August | 30.7 | 24.6–34.1 |
+| September | 26.0 | 20.5–32.4 |
+| October | 29.2 | 22.5–33.2 |
+
+From 1 April to 18 June, hourly values cycled through a few fixed levels (1.34, 2.67, 3.2x, 4.9x,
+8.3x), with the daily maximum at 8.29–8.36 ppb on almost every day: a malfunctioning analyzer
+repeating a pattern, not a measurement. A brief spike on 11 June (daily mean 11.25, max 20.6) may
+have been an early repair or calibration attempt.
+
+Transition on **19 June** (daily mean 17.9, max 52.7); normal readings from **20 June**. 24 June has
+no data: the 23–25 June network outage (F28). Late June (20–30) daily means were unusually stable
+(31.7–32.4 ppb): noted, not investigated; later months show natural day-to-day variation.
+
+Not caught by `qa_flatlines`, which detects identical consecutive values; these varied slightly.
+One sensor's history cannot show whether its level is right; comparison with similar sensors can.
+
+**Rule:** Sector-51 NO2 (sensor 12236256) from 1 April to 19 June 2026 (inclusive, covering the
+transition day) is excluded via the manual overrides seed.
+**Future work:** a low-variability check (sensors whose daily means stay in a very narrow band for
+weeks) and automated step-change detection.
 
 ## 5. Sample raw record (`/v3/sensors/12236259/hours`)
 

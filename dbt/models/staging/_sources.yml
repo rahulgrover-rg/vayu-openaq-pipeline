@@ -16,3 +16,10 @@ sources:
         description: "One file per day: in-scope stations (raw API records) and selected sensors."
         meta: 
           external_location: "read_json('s3://raw/openaq/metadata/snapshot_date=*/stations.json', hive_partitioning=true, union_by_name=true)"
+
+  - name: rejected 
+    description: "Readings rejected by the spark transform, each with one primary reject_reason."
+    tables: 
+      - name: hours 
+        meta: 
+          external_location: "read_parquet('s3://rejected/openaq/hours/*.parquet')"
