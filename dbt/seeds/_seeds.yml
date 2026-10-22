@@ -1,0 +1,15 @@
+version: 2 
+
+seeds: 
+  - name: quality_overrides 
+    description: "Manually identified bad periods per sensor, each with a reason. Readings in these periods are treated as usable in fact_sensor_daily."
+    columns: 
+      - name: sensor_id 
+        data_tests: 
+          - not_null 
+          - relationships: 
+              arguments: 
+                to: ref('dim_sensor')
+                field: sensor_id 
+      - name: reason 
+        data_tests: [not_null]

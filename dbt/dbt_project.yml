@@ -23,4 +23,14 @@ vars:
   min_daily_capture_hours: 18
   flatline_min_hours: 6 
   network_outage_share: 0.8
+  feed_lag_alert_hours: 144
+
+seeds: 
+  vayu: 
+    quality_overrides: 
+      +column_types: 
+        sensor_id: bigint 
+        valid_from: date
+        valid_to: date
+        reason: varchar
 

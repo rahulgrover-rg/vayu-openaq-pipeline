@@ -8,6 +8,10 @@ sources:
     tables: 
       - name: hours
         description: "One row per session per hour. Hard rejects are excluded; soft flags in quality_flags."
+        config: 
+          loaded_at_field: period_start_utc 
+          freshness: 
+            warn_after: {count: 48, period: hour}
 
   - name: raw_metadata 
     description: "Daily station and sensor metadata snapshots written by discovery (vayu_extract)."

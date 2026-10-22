@@ -274,6 +274,8 @@ The analyzer was flatlined at its maximum; the true concentration was at least t
 Concentrated at NSIT Dwarka (5622) in May–June: PM2.5 766–858 vs PM10 20–130.
 **Rule:** cannot be decided per reading (which instrument is wrong is unknown) → dbt cross-sensor
 flag `pm25_exceeds_pm10` and a dbt test reporting the rate (Weekend 3).
+**Update:** with flatline detection, the faulty instrument can sometimes be identified, e.g.
+Cantonment Area June: PM10 zero runs (F29) explain the PM2.5 > PM10 hours.
 
 ### F23 — 11% of readings have under 75% hourly coverage
 ~12,000 readings per pollutant.
