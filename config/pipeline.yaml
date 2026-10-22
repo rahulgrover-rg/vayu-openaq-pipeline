@@ -33,7 +33,7 @@ history:
   start_date: 2026-04-01 
 
 incremental: 
-  lookback_days: 3 
+  lookback_days: 7 
 
 quality: 
   sentinel_values: [-10000]

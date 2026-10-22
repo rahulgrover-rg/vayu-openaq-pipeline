@@ -104,6 +104,17 @@ On 3 Oct 2026 (~13:00 UTC), every government station showed the same last readin
 
 **Impact:** A daily run that fetches "yesterday" exactly once will miss readings that arrive late.
 **Rule:** Incremental runs re-fetch a **lookback window** of recent days (3 days initially). Writes must be idempotent (overwrite, not append) so re-fetching never creates duplicates.
+**Update (21 Oct 2026): government data arrives in daily batches, and the feed can stall.**
+All 27 reporting government stations (six agencies) had the same newest reading:
+18 Oct 2026, 08:30 UTC. Measured at 21 Oct 18:07 UTC, that is an ~82-hour gap.
+Identical cutoffs across independent agencies point to an upstream feed outage, not station delay.
+Normal pattern (3 Oct): daily batch, cutoff ~08:30 UTC, ~29 h old when checked.
+
+**Impact:** an outage longer than the lookback window around a month end would lose that month's
+final days permanently (the month would be marked final before they arrive).
+**Rules:**
+- Lookback widened from 3 to 7 days.
+- dbt freshness check warns when the newest reading is older than 48 h (step 5).
 
 ### F7 — Hours can be missing
 One day of hourly data for sensor `12236259` returned **23 of 24** hours.
