@@ -64,6 +64,14 @@ def vayu_transform():
 
         return summary
 
-    spark_transform() >> dbt_source_freshness() >> dbt_build()
+    @task 
+    def publish_serving_copy(): 
+        from vayu.publish import publish_warehouse
+
+        tables = publish_warehouse("/opt/airflow/warehouse/vayu.duckdb", "/opt/airflow/warehouse/serving/vayu_serving.duckdb")
+        log.info("Published %d tables: %s", len(tables), ", ".join(tables))
+        return {"tables": tables}
+
+    spark_transform() >> dbt_source_freshness() >> dbt_build() >> publish_serving_copy()
 
 vayu_transform()

@@ -1,1 +1,2 @@
 CREATE DATABASE pipeline;
+CREATE DATABASE metabase;
