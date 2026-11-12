@@ -42,7 +42,7 @@ select
     p.is_in_scope_now and date_diff('day', cast(p.last_reading_utc as date), current_date) <= 3 as is_currently_reporting,
     p.first_seen_on,
     p.last_seen_on,
-    p.is_in_scope_now
+    p.is_in_scope_now as is_in_current_scope
 FROM parsed p  
 left join cities c on c.city_raw = p.city_raw 
 cross join current_snapshot cs 
