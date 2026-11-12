@@ -1,0 +1,18 @@
+version : 2 
+
+exposures: 
+  - name: vayu_dashboard 
+    label: "Vayu air-quality dashboard (Metabase)"
+    type: dashboard
+    maturity: medium
+    description: "Air quality and data quality for Delhi NCR. Chart SQL lives in dashboard/queries.sql"
+    owner: 
+      name: "Rahul Grover"
+    depends_on: 
+      - ref('mart_station_day')
+      - ref('fact_measurement')
+      - ref('dim_location')
+      - ref('qa_network_days')
+      - ref('qa_station_incidents')
+      - ref('qa_flatlines')
+      - ref('qa_pm_consistency')
